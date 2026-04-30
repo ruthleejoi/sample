@@ -1,0 +1,808 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hungry Snake: Meal Time Grammar Quest</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@500;700&display=swap');
+        
+        :root {
+            --neon-green: #39FF14;
+            --dark-bg: #0a0a0a;
+            --card-bg: #1a1a1a;
+            --text-main: #ffffff;
+        }
+
+        body {
+            font-family: 'Quicksand', sans-serif;
+            touch-action: none;
+            overflow: hidden;
+            background-color: var(--dark-bg);
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            color: var(--text-main);
+        }
+
+        #game-container {
+            position: relative;
+            flex-grow: 1;
+            width: 100vw;
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        canvas {
+            background-color: #111;
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            border: 2px solid #333;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            padding: 2rem;
+            backdrop-filter: blur(8px);
+        }
+
+        #start-prompt-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 50;
+            pointer-events: auto;
+        }
+
+        .full-screen-zoom {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            background: rgba(0,0,0,0.95);
+            z-index: 1000;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            padding: 20px;
+            animation: zoomIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes zoomIn {
+            from { transform: scale(0.8); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        .zoomed-img {
+            max-width: 85%;
+            max-height: 55vh;
+            border: 8px solid var(--neon-green);
+            border-radius: 2rem;
+            box-shadow: 0 0 30px var(--neon-green);
+            margin-bottom: 2rem;
+        }
+
+        .vocab-card {
+            background: var(--card-bg);
+            border-radius: 1.5rem;
+            overflow: hidden;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 2px solid #333;
+        }
+        
+        .vocab-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--neon-green);
+            box-shadow: 0 0 15px rgba(57, 255, 20, 0.3);
+        }
+
+        .card-img { 
+             width: 100%; 
+             height: 120px; 
+             object-fit: cover; 
+             opacity: 0.9;
+        }
+
+        .clock {
+            width: 50px; height: 50px; border: 2px solid var(--neon-green);
+            border-radius: 50%; position: relative; background: #000;
+        }
+        .clock-hand {
+            position: absolute; bottom: 50%; left: 50%;
+            transform-origin: bottom; background: var(--neon-green); border-radius: 4px;
+        }
+        .hour-hand { width: 3px; height: 12px; }
+        .minute-hand { width: 2px; height: 18px; }
+
+        .btn-arcade {
+            background: var(--neon-green);
+            color: black;
+            box-shadow: 0 6px 0 #1a7a0a;
+            transition: all 0.1s;
+        }
+        .btn-arcade:active {
+            transform: translateY(3px);
+            box-shadow: 0 3px 0 #1a7a0a;
+        }
+
+        .arcade-container {
+            border: 4px solid var(--neon-green);
+            border-radius: 2rem;
+            background: #111;
+            padding: 2rem;
+            max-width: 1000px;
+            width: 100%;
+            position: relative;
+        }
+
+        .rule-card {
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 2px solid #333;
+            background: #1a1a1a;
+        }
+        .rule-card:hover {
+            background: #222;
+            border-color: var(--neon-green);
+            transform: scale(1.02);
+        }
+
+        .pill-header {
+            background: var(--neon-green);
+            color: black;
+            padding: 0.3rem 1rem;
+            border-radius: 9999px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 0.8rem;
+            margin-bottom: 0.5rem;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .pulse-text { animation: pulse 1.5s infinite; }
+
+        /* Directional Pad for Touch */
+        .d-pad {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            display: grid;
+            grid-template-areas: ". up ." "left . right" ". down .";
+            gap: 10px;
+            opacity: 0.5;
+            pointer-events: none;
+        }
+        .d-pad button {
+            width: 50px; height: 50px; background: #333; border: 1px solid var(--neon-green);
+            color: var(--neon-green); font-weight: bold; border-radius: 8px;
+            pointer-events: auto;
+        }
+    </style>
+</head>
+<body>
+    <div id="ui-top" class="w-full bg-black border-b border-zinc-800 p-4 flex justify-between items-center z-10">
+        <div class="flex items-center gap-6">
+            <div>
+                <h1 class="text-xl font-bold text-neon-green tracking-tighter">SNAKE QUEST</h1>
+                <div class="flex gap-1 mt-1" id="lives-container"></div>
+            </div>
+            <div class="flex items-center gap-4 bg-zinc-900 p-2 px-4 rounded-xl border border-zinc-800">
+                <div class="clock" id="analog-clock">
+                    <div class="clock-hand hour-hand" id="hour-hand"></div>
+                    <div class="clock-hand minute-hand" id="min-hand"></div>
+                </div>
+                <div>
+                    <div id="meal-indicator" class="text-[10px] uppercase text-neon-green font-bold tracking-widest">Breakfast Time 🌞</div>
+                    <div id="time-indicator" class="text-lg font-bold text-white">07:00 AM</div>
+                </div>
+            </div>
+        </div>
+        <div class="text-right flex items-center gap-4">
+            <button id="music-btn" onclick="toggleMusic(event)" class="bg-zinc-800 text-zinc-400 px-4 py-2 rounded-lg text-xs font-bold border border-zinc-700 hover:bg-zinc-700 transition-all">🎵 MUSIC OFF</button>
+            <div class="text-3xl font-bold text-neon-green" id="score">000</div>
+        </div>
+    </div>
+
+    <div id="game-container">
+        <canvas id="gameCanvas"></canvas>
+
+        <div id="start-prompt-overlay">
+            <div class="bg-black border-2 border-neon-green p-10 rounded-3xl text-center shadow-[0_0_30px_rgba(57,255,20,0.2)]">
+                <p class="text-white text-3xl font-bold mb-2 pulse-text">READY?</p>
+                <p class="text-neon-green text-sm font-medium tracking-widest uppercase mb-6">Press Arrow Key or Tap Controls to Start</p>
+                <div class="grid grid-cols-3 gap-2 w-32 mx-auto">
+                    <div></div><button onclick="handleDirection('up')" class="bg-zinc-800 p-3 rounded-lg border border-neon-green text-neon-green">▲</button><div></div>
+                    <button onclick="handleDirection('left')" class="bg-zinc-800 p-3 rounded-lg border border-neon-green text-neon-green">◀</button>
+                    <button onclick="handleDirection('down')" class="bg-zinc-800 p-3 rounded-lg border border-neon-green text-neon-green">▼</button>
+                    <button onclick="handleDirection('right')" class="bg-zinc-800 p-3 rounded-lg border border-neon-green text-neon-green">▶</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- VOCAB PREVIEW -->
+        <div id="preview-vocab" class="modal-overlay flex">
+            <div class="arcade-container overflow-y-auto max-h-[90vh]">
+                <div class="flex flex-col items-center gap-2 mb-8">
+                    <h2 class="text-3xl font-bold text-neon-green tracking-widest uppercase">Select Your Items</h2>
+                    <h3 class="text-zinc-500 font-bold">Vocabulary Checklist</h3>
+                </div>
+                <div class="grid grid-cols-3 gap-4 mb-8" id="meal-vocab-list"></div>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8" id="food-vocab-list"></div>
+                <button onclick="showGrammarPreview()" class="w-full btn-arcade py-5 rounded-xl font-bold text-xl uppercase tracking-tighter">
+                    REVIEW SENTENCE RULES
+                </button>
+            </div>
+        </div>
+
+        <!-- GRAMMAR PREVIEW -->
+        <div id="preview-grammar" class="modal-overlay">
+            <div class="arcade-container max-w-4xl overflow-y-auto max-h-[90vh]">
+                <h2 class="text-3xl font-bold text-center mb-2 text-neon-green uppercase italic">Grammar Power-Ups</h2>
+                <p class="text-center text-zinc-500 mb-8">Click a card to enlarge rules! 💡</p>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                    <div class="space-y-4">
+                        <h3 class="text-zinc-400 font-bold text-xs uppercase tracking-widest px-2">Conversation Patterns</h3>
+                        <div onclick="zoomRule('Pattern 1', 'Would you like some ____?\n\nYes, please!\nNo, thank you. I\'d like some ____.')" class="rule-card p-5 rounded-2xl">
+                            <p class="text-white font-bold mb-1">Would you like <span class="text-neon-green">some</span> ____?</p>
+                            <p class="text-zinc-500 text-xs uppercase tracking-wider">Polite Requests & Offers</p>
+                        </div>
+                        <div onclick="zoomRule('Pattern 2', 'What would you like for breakfast/lunch/dinner?\n\nI\'d like some ____.')" class="rule-card p-5 rounded-2xl">
+                            <p class="text-white font-bold mb-1">What would you like for...?</p>
+                            <p class="text-zinc-500 text-xs uppercase tracking-wider">Asking for Preferences</p>
+                        </div>
+                    </div>
+
+                    <div class="space-y-4">
+                        <h3 class="text-zinc-400 font-bold text-xs uppercase tracking-widest px-2">Grammar Tips</h3>
+                        <div onclick="zoomRule('Using AT', 'We use AT before a specific time.\n\nExample: I eat lunch AT 12:00 PM.')" class="rule-card p-5 rounded-2xl">
+                            <p class="text-white font-bold mb-1"><span class="text-neon-green">at</span> + Time</p>
+                            <p class="text-zinc-500 text-xs italic">"Breakfast is at 7:00 AM."</p>
+                        </div>
+                        <div onclick="zoomRule('Using SOME', 'We use SOME when we don\'t say exactly how many pieces of food.\n\nExample: I\'d like some bread.')" class="rule-card p-5 rounded-2xl">
+                            <p class="text-white font-bold mb-1"><span class="text-neon-green">some</span> + Food</p>
+                            <p class="text-zinc-500 text-xs italic">"I'd like some noodles."</p>
+                        </div>
+                    </div>
+                </div>
+
+                <button onclick="showBilingualInstructions()" class="w-full btn-arcade py-5 rounded-xl font-bold text-xl uppercase">
+                    NEXT LEVEL ➔
+                </button>
+            </div>
+        </div>
+
+        <!-- INSTRUCTIONS -->
+        <div id="preview-instructions" class="modal-overlay">
+            <div class="arcade-container max-w-2xl text-center">
+                <h2 class="text-3xl font-bold text-neon-green mb-8 italic">HOW TO PLAY</h2>
+                <div class="space-y-4 text-left mb-8">
+                    <div class="flex items-start gap-4 p-4 bg-zinc-900 rounded-xl border border-zinc-800">
+                        <div class="text-neon-green text-2xl">🕹️</div>
+                        <div>
+                            <p class="font-bold text-white uppercase text-sm">Arrows to move.</p>
+                            <p class="text-zinc-500 text-xs">使用方向鍵進行移動控制。選擇方向後蛇才會開始移動。</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start gap-4 p-4 bg-zinc-900 rounded-xl border border-zinc-800">
+                        <div class="text-neon-green text-2xl">⚡</div>
+                        <div>
+                            <p class="font-bold text-white uppercase text-sm">Eat & Answer.</p>
+                            <p class="text-zinc-500 text-xs">吃到食物並正確回答文法問題以獲得積分。</p>
+                        </div>
+                    </div>
+                </div>
+                <button onclick="startGame()" class="w-full btn-arcade py-5 rounded-xl font-bold text-xl uppercase">START MISSION</button>
+            </div>
+        </div>
+
+        <!-- FULL ZOOM MODAL -->
+        <div id="full-screen-zoom" class="full-screen-zoom" onclick="closeZoom()">
+            <img id="zoom-img" class="zoomed-img" src="">
+            <div id="zoom-title" class="text-3xl font-bold text-neon-green mb-2 text-center uppercase italic"></div>
+            <div id="zoom-desc" class="text-xl text-white font-bold text-center max-w-2xl px-10 whitespace-pre-line bg-zinc-900 p-6 rounded-2xl border border-zinc-800"></div>
+            <p class="mt-8 text-zinc-500 text-sm font-bold animate-bounce uppercase">Tap to Close</p>
+        </div>
+
+        <!-- IN-GAME GRAMMAR CHALLENGE -->
+        <div id="grammar-modal" class="modal-overlay">
+            <div class="arcade-container max-w-2xl">
+                <div class="flex justify-center mb-6">
+                    <div class="p-2 bg-zinc-900 rounded-2xl border-2 border-neon-green">
+                        <img id="prompt-img" src="" class="w-48 h-48 object-cover rounded-xl shadow-[0_0_20px_rgba(57,255,20,0.1)]">
+                    </div>
+                </div>
+                <h2 id="prompt-text" class="text-2xl font-bold text-white text-center mb-6 leading-relaxed"></h2>
+                <div id="options-container" class="grid grid-cols-1 gap-3"></div>
+                <div id="feedback" class="mt-4 p-4 rounded-xl hidden text-center">
+                    <p id="feedback-text" class="font-bold text-xl mb-4"></p>
+                    <button id="continue-game-btn" onclick="closePrompt()" class="btn-arcade px-10 py-3 rounded-lg font-bold text-md mx-auto">RESUME QUEST</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- GAME OVER / RESULTS -->
+        <div id="gameover-overlay" class="modal-overlay">
+            <div class="arcade-container max-lg text-center">
+                <h2 id="death-title" class="text-4xl font-black text-red-600 mb-2 italic">WASTED</h2>
+                <div id="final-results" class="hidden my-6">
+                    <p class="text-zinc-500 uppercase font-bold tracking-[0.3em] text-xs mb-1">Final Score</p>
+                    <h3 id="final-score-display" class="text-6xl font-black text-neon-green mb-6">0</h3>
+                    <div class="bg-zinc-900 p-4 rounded-xl border border-zinc-800">
+                        <p class="text-white font-bold text-sm">MISSION ACCOMPLISHED</p>
+                        <p class="text-zinc-500 text-xs mt-1">Show this to Teacher for your XP!</p>
+                    </div>
+                </div>
+                <div id="life-remaining-ui">
+                    <p id="death-msg" class="text-white mb-6 text-xl">LIVES LEFT: <span id="remaining-lives-text" class="font-bold text-neon-green">0</span></p>
+                    <div class="flex flex-col gap-3">
+                        <button id="respawn-btn" onclick="respawn()" class="btn-arcade py-4 rounded-xl font-bold text-lg uppercase">
+                            CONTINUE? (-5 Pts)
+                        </button>
+                        <button id="quit-btn" onclick="showFinalResults()" class="text-zinc-600 py-2 font-bold hover:text-zinc-400 transition-all uppercase text-xs">
+                            Quit & Save Score
+                        </button>
+                    </div>
+                </div>
+                <button id="restart-btn" onclick="location.reload()" class="w-full btn-arcade py-5 rounded-xl font-bold text-xl hidden mt-4">
+                    RESTART GAME
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let audioCtx;
+        let bgmNode;
+        let isMusicPlaying = false;
+
+        async function initAudio() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') await audioCtx.resume();
+        }
+
+        // Voice synthesis function for menu items
+        function speakText(text) {
+            if (!window.speechSynthesis) return;
+            // Stop any current speech
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'en-US';
+            utterance.rate = 0.9; // Slightly slower for clarity
+            window.speechSynthesis.speak(utterance);
+        }
+
+        function playSFX(type) {
+            if (!audioCtx) return;
+            initAudio();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            const now = audioCtx.currentTime;
+            if (type === 'correct') {
+                osc.type = 'triangle'; osc.frequency.setValueAtTime(523.25, now); osc.frequency.exponentialRampToValueAtTime(1046.50, now + 0.1);
+                gain.gain.setValueAtTime(0.1, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+                osc.start(); osc.stop(now + 0.2);
+            } else if (type === 'wrong') {
+                osc.type = 'sawtooth'; osc.frequency.setValueAtTime(150, now); osc.frequency.linearRampToValueAtTime(50, now + 0.3);
+                gain.gain.setValueAtTime(0.1, now); gain.gain.linearRampToValueAtTime(0.01, now + 0.3);
+                osc.start(); osc.stop(now + 0.3);
+            } else if (type === 'eat') {
+                osc.type = 'square'; osc.frequency.setValueAtTime(600, now); osc.frequency.exponentialRampToValueAtTime(300, now + 0.1);
+                gain.gain.setValueAtTime(0.1, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+                osc.start(); osc.stop(now + 0.1);
+            }
+        }
+
+        async function toggleMusic(e) {
+            if (e) e.stopPropagation();
+            await initAudio();
+            const btn = document.getElementById('music-btn');
+            if (isMusicPlaying) {
+                if (bgmNode) { bgmNode.stop(); bgmNode = null; }
+                isMusicPlaying = false;
+                btn.innerText = "🎵 MUSIC OFF";
+                btn.classList.replace('bg-neon-green', 'bg-zinc-800');
+                btn.classList.replace('text-black', 'text-zinc-400');
+            } else {
+                startBGM(); isMusicPlaying = true;
+                btn.innerText = "🎵 MUSIC ON";
+                btn.classList.replace('bg-zinc-800', 'bg-neon-green');
+                btn.classList.replace('text-zinc-400', 'text-black');
+            }
+        }
+
+        function startBGM() {
+            if (!audioCtx) return;
+            const length = 4.0; const sampleRate = audioCtx.sampleRate;
+            const buffer = audioCtx.createBuffer(1, sampleRate * length, sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < buffer.length; i++) {
+                const t = i / sampleRate; const beat = t % 0.5; const bar = t % 4.0;
+                const kick = Math.exp(-10 * beat) * Math.sin(2 * Math.PI * 40 * Math.exp(-2 * beat));
+                let freq = 110.00; 
+                if (bar > 1.0) freq = 123.47; 
+                if (bar > 2.0) freq = 98.00; 
+                if (bar > 3.0) freq = 110.00; 
+                const bass = Math.sin(2 * Math.PI * freq * t) * (beat < 0.2 ? 0.05 : 0);
+                const leadT = (t * 8) % 1; const note = freq * 4;
+                const lead = (Math.random() * 2 - 1) * Math.exp(-5 * leadT) * 0.01;
+                data[i] = (kick * 0.1) + bass + lead;
+            }
+            bgmNode = audioCtx.createBufferSource(); bgmNode.buffer = buffer; bgmNode.loop = true;
+            bgmNode.connect(audioCtx.destination); bgmNode.start();
+        }
+
+        const foods = [
+            { id: 'bread', label: 'bread', phonetic: '/brɛd/', article: 'some', img: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&q=80&w=400' },
+            { id: 'chicken', label: 'chicken', phonetic: '/ˈtʃɪk.ɪn/', article: 'some', img: 'https://images.unsplash.com/photo-1598515214211-89d3c73ae83b?auto=format&fit=crop&q=80&w=400' },
+            { id: 'salad', label: 'salad', phonetic: '/ˈsæl.əd/', article: 'some', img: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&q=80&w=400' },
+            { id: 'soup', label: 'soup', phonetic: '/suːp/', article: 'some', img: 'https://images.unsplash.com/photo-1547592166-23ac45744acd?auto=format&fit=crop&q=80&w=400' },
+            { id: 'noodles', label: 'noodles', phonetic: '/ˈnuː.dəlz/', article: 'some', img: 'https://images.unsplash.com/photo-1585032226651-759b368d7246?auto=format&fit=crop&q=80&w=400' },
+            { id: 'rice', label: 'rice', phonetic: '/raɪs/', article: 'some', img: 'https://images.unsplash.com/photo-1516684732162-798a0062be99?auto=format&fit=crop&q=80&w=400' },
+            { id: 'juice', label: 'orange juice', phonetic: '/ˈɒr.ɪndʒ dʒuːs/', article: 'some', img: 'https://images.unsplash.com/photo-1613478223719-2ab802602423?auto=format&fit=crop&q=80&w=400' },
+            { id: 'pizza', label: 'pizza', phonetic: '/ˈpiːt.sə/', article: 'some', img: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&q=80&w=400' }
+        ];
+
+        const mealTypes = [
+            { id: 'breakfast', label: 'breakfast', phonetic: '/ˈbrɛk.fəst/', img: 'https://images.unsplash.com/photo-1533089860892-a7c6f0a88666?auto=format&fit=crop&q=80&w=400', desc: 'At 7:00 AM' },
+            { id: 'lunch', label: 'lunch', phonetic: '/lʌntʃ/', img: 'https://images.unsplash.com/photo-1543339308-43e59d6b73a6?auto=format&fit=crop&q=80&w=400', desc: 'At 12:00 PM' },
+            { id: 'dinner', label: 'dinner', phonetic: '/ˈdɪn.ər/', img: 'https://images.unsplash.com/photo-1515516969-d4008cc6241a?auto=format&fit=crop&q=80&w=400', desc: 'At 6:00 PM' }
+        ];
+
+        const meals = {
+            breakfast: { label: 'Breakfast Time 🌞', time: '07:00 AM', hour: 7, min: 0, next: 'lunch' },
+            lunch: { label: 'Lunch Time 🌳', time: '12:00 PM', hour: 12, min: 0, next: 'dinner' },
+            dinner: { label: 'Dinner Time 🌙', time: '06:00 PM', hour: 6, min: 0, next: 'breakfast' }
+        };
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const gridSize = 40; 
+        let snake = [{x: 5, y: 5}];
+        let food = {x: 10, y: 10, type: 'bread'};
+        let dx = 0, dy = 0, score = 0, lives = 3;
+        let gameActive = false, isPaused = false, currentMeal = 'breakfast';
+        let isWaitingForStart = true; 
+        let lastTimestamp = 0;
+        let baseSpeed = 180;
+        let speedBoost = 0;
+        let pendingGrowth = 0;
+        const assets = {};
+
+        function resizeCanvas() {
+            canvas.width = Math.min(window.innerWidth * 0.95, 800);
+            canvas.height = Math.min(window.innerHeight * 0.65, 600);
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        function preloadAssets(callback) {
+            let loaded = 0; const items = [...foods, ...mealTypes];
+            items.forEach(item => {
+                const img = new Image();
+                img.crossOrigin = "anonymous";
+                img.onload = () => { loaded++; if (loaded === items.length) callback(); };
+                img.src = item.img;
+                assets[item.id] = img;
+            });
+        }
+
+        function initVocab() {
+            const foodList = document.getElementById('food-vocab-list');
+            const mealList = document.getElementById('meal-vocab-list');
+            
+            mealTypes.forEach(m => {
+                const container = document.createElement('div');
+                container.className = "flex flex-col items-center gap-2";
+                const pill = document.createElement('div');
+                pill.className = "pill-header w-full";
+                pill.innerText = m.label.toUpperCase();
+                const card = createCard(m);
+                card.querySelector('p').remove();
+                const labelContainer = document.createElement('div');
+                labelContainer.className = "p-3 text-center bg-zinc-900";
+                labelContainer.innerHTML = `<p class="text-white font-bold text-sm leading-tight">${m.label}</p><p class="text-neon-green font-medium text-[10px] my-0.5">${m.phonetic}</p><p class="text-zinc-500 font-bold text-[9px] uppercase">${m.desc}</p>`;
+                card.appendChild(labelContainer);
+                container.appendChild(pill);
+                container.appendChild(card);
+                mealList.appendChild(container);
+            });
+
+            foods.forEach(f => {
+                const card = createCard(f);
+                card.querySelector('p').remove();
+                const labelContainer = document.createElement('div');
+                labelContainer.className = "p-2 text-center bg-zinc-900";
+                labelContainer.innerHTML = `<p class="text-white font-bold text-xs leading-tight">${f.label}</p><p class="text-neon-green font-medium text-[9px] mt-0.5">${f.phonetic}</p>`;
+                card.appendChild(labelContainer);
+                foodList.appendChild(card);
+            });
+        }
+
+        function createCard(item) {
+            const card = document.createElement('div');
+            card.className = "vocab-card w-full";
+            card.innerHTML = `<img src="${item.img}" class="card-img"><p class="p-2 text-white font-bold uppercase text-[10px]">${item.label}</p>`;
+            card.onclick = (e) => {
+                e.stopPropagation();
+                // Speak the item label when clicked
+                speakText(item.label);
+                zoomImageWithText(item.img, item.label, `${item.phonetic}\n${item.article ? `${item.article} ${item.label}` : item.desc}`);
+            };
+            return card;
+        }
+
+        function zoomImageWithText(src, title, desc) {
+            const z = document.getElementById('full-screen-zoom');
+            if (src) {
+                document.getElementById('zoom-img').style.display = 'block';
+                document.getElementById('zoom-img').src = src;
+            } else {
+                document.getElementById('zoom-img').style.display = 'none';
+            }
+            document.getElementById('zoom-title').innerText = title;
+            document.getElementById('zoom-desc').innerText = desc;
+            z.style.display = 'flex';
+        }
+
+        function zoomRule(title, desc) { 
+            zoomImageWithText(null, title, desc); 
+        }
+        function closeZoom() { 
+            document.getElementById('full-screen-zoom').style.display = 'none'; 
+            if (window.speechSynthesis) window.speechSynthesis.cancel();
+        }
+        function showGrammarPreview() { document.getElementById('preview-vocab').style.display = 'none'; document.getElementById('preview-grammar').style.display = 'flex'; }
+        function showBilingualInstructions() { document.getElementById('preview-grammar').style.display = 'none'; document.getElementById('preview-instructions').style.display = 'flex'; }
+
+        async function startGame() {
+            await initAudio();
+            document.getElementById('preview-instructions').style.display = 'none';
+            resetGame(true);
+        }
+
+        function resetGame(fullReset) {
+            if (fullReset) { score = 0; lives = 3; speedBoost = 0; currentMeal = 'breakfast'; }
+            const maxX = Math.floor(canvas.width/gridSize);
+            const maxY = Math.floor(canvas.height/gridSize);
+            snake = [{x: Math.floor(maxX/2), y: Math.floor(maxY/2)}];
+            dx = 0; dy = 0;
+            gameActive = true; 
+            isPaused = false; 
+            isWaitingForStart = true; 
+            updateUI();
+            spawnFood();
+            document.getElementById('start-prompt-overlay').style.display = 'flex';
+            requestAnimationFrame(gameLoop);
+        }
+
+        function handleDirection(dir) {
+            if (!isWaitingForStart && !gameActive) return;
+            
+            let newDx = 0, newDy = 0;
+            if (dir === 'up' && dy === 0) { newDx = 0; newDy = -1; }
+            else if (dir === 'down' && dy === 0) { newDx = 0; newDy = 1; }
+            else if (dir === 'left' && dx === 0) { newDx = -1; newDy = 0; }
+            else if (dir === 'right' && dx === 0) { newDx = 1; newDy = 0; }
+            else { return; } // Invalid direction (e.g. going backward)
+
+            dx = newDx; dy = newDy;
+
+            if (isWaitingForStart) {
+                document.getElementById('start-prompt-overlay').style.display = 'none';
+                isWaitingForStart = false;
+            }
+        }
+
+        function respawn() {
+            score = Math.max(0, score - 5);
+            document.getElementById('gameover-overlay').style.display = 'none';
+            resetGame(false);
+        }
+
+        function showFinalResults() {
+            document.getElementById('death-title').innerText = "MISSION CLEAR";
+            document.getElementById('death-title').className = "text-4xl font-black text-neon-green mb-2 italic";
+            document.getElementById('life-remaining-ui').classList.add('hidden');
+            document.getElementById('final-results').classList.remove('hidden');
+            document.getElementById('restart-btn').classList.remove('hidden');
+            document.getElementById('final-score-display').innerText = score;
+        }
+
+        function updateUI() {
+            document.getElementById('score').innerText = score.toString().padStart(3, '0');
+            document.getElementById('meal-indicator').innerText = meals[currentMeal].label;
+            document.getElementById('time-indicator').innerText = meals[currentMeal].time;
+            document.getElementById('lives-container').innerHTML = '<span class="text-red-500 text-2xl mx-0.5">♥</span>'.repeat(lives);
+            updateClock();
+        }
+
+        function updateClock() {
+            const mealData = meals[currentMeal];
+            const hourDeg = (mealData.hour % 12) * 30 + (mealData.min / 60) * 30;
+            const minDeg = mealData.min * 6;
+            document.getElementById('hour-hand').style.transform = `translateX(-50%) rotate(${hourDeg}deg)`;
+            document.getElementById('min-hand').style.transform = `translateX(-50%) rotate(${minDeg}deg)`;
+        }
+
+        function spawnFood() {
+            const maxX = Math.floor(canvas.width / gridSize) - 1;
+            const maxY = Math.floor(canvas.height / gridSize) - 1;
+            let newX, newY;
+            do {
+                newX = Math.floor(Math.random() * maxX);
+                newY = Math.floor(Math.random() * maxY);
+            } while (snake.some(s => s.x === newX && s.y === newY));
+            food.x = newX; food.y = newY;
+            food.type = foods[Math.floor(Math.random() * foods.length)].id;
+        }
+
+        window.addEventListener('keydown', e => {
+            if (!gameActive || isPaused) return;
+            const dirMap = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
+            if (dirMap[e.key]) handleDirection(dirMap[e.key]);
+        });
+
+        function gameLoop(t) {
+            if (!gameActive || isPaused) return;
+            if (isWaitingForStart) { draw(); requestAnimationFrame(gameLoop); return; }
+            
+            const currentSpeed = Math.max(70, baseSpeed - speedBoost);
+            if (t - lastTimestamp > currentSpeed) {
+                move(); draw(); lastTimestamp = t;
+            }
+            requestAnimationFrame(gameLoop);
+        }
+
+        function move() {
+            if (dx === 0 && dy === 0) return;
+            const head = {x: snake[0].x + dx, y: snake[0].y + dy};
+            const maxX = Math.floor(canvas.width/gridSize);
+            const maxY = Math.floor(canvas.height/gridSize);
+            if (head.x < 0 || head.x >= maxX || head.y < 0 || head.y >= maxY || snake.some(s => s.x === head.x && s.y === head.y)) {
+                lives--; updateUI(); playSFX('wrong'); gameActive = false;
+                document.getElementById('gameover-overlay').style.display = 'flex';
+                document.getElementById('remaining-lives-text').innerText = lives;
+                if (lives <= 0) showFinalResults();
+                return;
+            }
+            snake.unshift(head);
+            if (head.x === food.x && head.y === food.y) { playSFX('eat'); triggerPrompt(); }
+            else if (pendingGrowth > 0) { pendingGrowth--; }
+            else { snake.pop(); }
+        }
+
+        function draw() {
+            ctx.fillStyle = '#000'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.strokeStyle = '#222'; ctx.lineWidth = 1;
+            for(let i=0; i<canvas.width; i+=gridSize) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,canvas.height); ctx.stroke(); }
+            for(let i=0; i<canvas.height; i+=gridSize) { ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(canvas.width,i); ctx.stroke(); }
+            
+            const img = assets[food.type];
+            if (img) {
+                ctx.save(); ctx.shadowBlur = 15; ctx.shadowColor = "white";
+                ctx.drawImage(img, food.x * gridSize + 2, food.y * gridSize + 2, gridSize - 4, gridSize - 4);
+                ctx.restore();
+            }
+
+            snake.forEach((s, i) => {
+                ctx.fillStyle = i === 0 ? '#39FF14' : '#1a7a0a';
+                ctx.shadowBlur = i === 0 ? 10 : 0; ctx.shadowColor = '#39FF14';
+                ctx.fillRect(s.x*gridSize + 2, s.y*gridSize + 2, gridSize - 4, gridSize - 4);
+                if (i === 0) {
+                    ctx.fillStyle = 'black';
+                    if (dx === 1 || (dx === 0 && dy === 0)) {
+                        ctx.fillRect(s.x*gridSize+25, s.y*gridSize+10, 5, 5);
+                        ctx.fillRect(s.x*gridSize+25, s.y*gridSize+25, 5, 5);
+                    } else if (dx === -1) {
+                        ctx.fillRect(s.x*gridSize+10, s.y*gridSize+10, 5, 5);
+                        ctx.fillRect(s.x*gridSize+10, s.y*gridSize+25, 5, 5);
+                    } else if (dy === -1) {
+                        ctx.fillRect(s.x*gridSize+10, s.y*gridSize+10, 5, 5);
+                        ctx.fillRect(s.x*gridSize+25, s.y*gridSize+10, 5, 5);
+                    } else if (dy === 1) {
+                        ctx.fillRect(s.x*gridSize+10, s.y*gridSize+25, 5, 5);
+                        ctx.fillRect(s.x*gridSize+25, s.y*gridSize+25, 5, 5);
+                    }
+                }
+            });
+        }
+
+        function triggerPrompt() {
+            isPaused = true;
+            const foodData = foods.find(f => f.id === food.type);
+            const otherFood = foods.filter(f => f.id !== food.type)[Math.floor(Math.random() * (foods.length-1))];
+            const usePattern1 = Math.random() > 0.5;
+            let questionData;
+
+            if (usePattern1) {
+                questionData = {
+                    q: `Would you like some ${foodData.label}?`,
+                    opts: [
+                        { text: "Yes, please.", correct: true }, 
+                        { text: `No, thank you. I'd like some ${otherFood.label}.`, correct: true }, 
+                        { text: "I'd like some soup.", correct: false }
+                    ]
+                };
+            } else {
+                questionData = {
+                    q: `What would you like for ${currentMeal}?`,
+                    opts: [
+                        { text: `I'd like some ${foodData.label}.`, correct: true }, 
+                        { text: `Yes, please.`, correct: false },
+                        { text: `No, thank you.`, correct: false }
+                    ]
+                };
+            }
+
+            const modal = document.getElementById('grammar-modal');
+            const optCont = document.getElementById('options-container');
+            const feedback = document.getElementById('feedback');
+            document.getElementById('prompt-img').src = foodData.img;
+            document.getElementById('prompt-text').innerText = questionData.q;
+            optCont.innerHTML = ""; feedback.classList.add('hidden');
+            
+            questionData.opts.sort(() => Math.random() - 0.5).forEach((optObj) => {
+                const b = document.createElement('button');
+                b.className = "w-full p-5 rounded-xl border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 font-bold transition-all text-white text-lg text-left";
+                b.innerText = optObj.text;
+                b.onclick = () => {
+                    if (optObj.correct) {
+                        playSFX('correct'); score += 5; speedBoost += 5; pendingGrowth += 2;
+                        document.getElementById('feedback-text').innerText = "CORRECT! +5 PTS";
+                        document.getElementById('feedback-text').className = "text-neon-green font-bold text-xl mb-4";
+                    } else {
+                        playSFX('wrong'); score = Math.max(0, score - 2);
+                        document.getElementById('feedback-text').innerText = "WRONG! -2 PTS";
+                        document.getElementById('feedback-text').className = "text-red-500 font-bold text-xl mb-4";
+                    }
+                    optCont.classList.add('pointer-events-none', 'opacity-30');
+                    feedback.classList.remove('hidden');
+                    currentMeal = meals[currentMeal].next; updateUI();
+                };
+                optCont.appendChild(b);
+            });
+            modal.style.display = "flex";
+        }
+
+        function closePrompt() {
+            document.getElementById('grammar-modal').style.display = "none";
+            document.getElementById('options-container').classList.remove('pointer-events-none', 'opacity-30');
+            isPaused = false; 
+            isWaitingForStart = true;
+            document.getElementById('start-prompt-overlay').style.display = 'flex';
+            spawnFood(); 
+            requestAnimationFrame(gameLoop);
+        }
+
+        window.onload = () => {
+            preloadAssets(() => {
+                initVocab();
+                document.getElementById('preview-vocab').style.display = 'flex';
+            });
+        };
+    </script>
+</body>
+</html>
